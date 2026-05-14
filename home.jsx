@@ -197,7 +197,7 @@ function Busca({ query, setQuery, categoria, setCategoria, onSearch }) {
 }
 
 // ===== CATEGORIAS =====
-function CategoriaCard({ cat, index, onSelect, selected }) {
+function CategoriaCard({ cat, index, count, onSelect, selected }) {
   const numStr = String(index + 1).padStart(2, "0");
   const bg = {
     background: `
@@ -208,11 +208,12 @@ function CategoriaCard({ cat, index, onSelect, selected }) {
     `
   };
   return (
-    <a className={`cat-card${selected ? " cat-card-selected" : ""}`} href="#projetos"
-      onClick={(e) => { e.preventDefault(); onSelect(cat); }}>
+    <a className={`cat-card${selected ? " cat-card-selected" : ""}`} href="#decoracoes"
+      onClick={(e) => { e.preventDefault(); onSelect(selected ? null : cat); }}>
       <div className="cat-card-bg" style={bg}></div>
       <div className="cat-card-overlay"></div>
       <div className="cat-card-arrow">→</div>
+      {count > 0 && <span className="cat-card-count">{count}</span>}
       <div className="cat-card-content">
         <span className="cat-card-num">{numStr} · Categoria</span>
         <h3>{cat.nome}</h3>
@@ -220,7 +221,12 @@ function CategoriaCard({ cat, index, onSelect, selected }) {
     </a>);
 }
 
-function Categorias({ onSelectCat, catSelecionada }) {
+function Categorias({ onSelectCat, catSelecionada, temas, onOpen }) {
+  const particulares = (temas || []).filter(t => t.tipo === "particular");
+  const countPorCat = {};
+  CATEGORIAS_HOME.forEach(c => { countPorCat[c.id] = particulares.filter(t => t.categoria === c.nome).length; });
+  const filtradas = catSelecionada ? particulares.filter(t => t.categoria === catSelecionada.nome) : [];
+
   return (
     <section className="home-categorias" id="decoracoes">
       <div className="home-section-head">
@@ -238,10 +244,31 @@ function Categorias({ onSelectCat, catSelecionada }) {
       <div className="cat-grid">
         {CATEGORIAS_HOME.map((c, i) => (
           <CategoriaCard key={c.id} cat={c} index={i}
+            count={countPorCat[c.id]}
             onSelect={onSelectCat}
             selected={catSelecionada && catSelecionada.id === c.id} />
         ))}
       </div>
+      {catSelecionada && (
+        <div className="cat-projetos" id="projetos">
+          <div className="cat-projetos-head">
+            <div>
+              <span className="home-section-tag">{catSelecionada.nome}</span>
+              <p className="home-section-sub" style={{marginTop: 6}}>
+                {filtradas.length > 0
+                  ? `${filtradas.length} decoraç${filtradas.length !== 1 ? "ões" : "ão"} disponíveis — mencione o código ao falar com a Cris.`
+                  : "Nenhuma decoração cadastrada nesta categoria ainda."}
+              </p>
+            </div>
+            <button className="cat-projetos-fechar" onClick={() => onSelectCat(null)}>fechar ✕</button>
+          </div>
+          {filtradas.length > 0 && (
+            <div className="cat-projetos-grid">
+              {filtradas.map((t, i) => <window.TemaCard key={t.id} tema={t} index={i} onOpen={onOpen} />)}
+            </div>
+          )}
+        </div>
+      )}
     </section>);
 }
 
@@ -508,56 +535,6 @@ function HomeFooter({ onAdminClick }) {
 }
 
 // ===== APP =====
-// ===== PORTFOLIO FILTRADO POR CATEGORIA =====
-function PortfolioHome({ temas, catSelecionada, onClearCat, onOpen }) {
-  const particulares = (temas || []).filter((t) => t.tipo === "particular");
-  const filtradas = catSelecionada
-    ? particulares.filter((t) => t.categoria === catSelecionada.nome)
-    : particulares;
-
-  if (particulares.length === 0) return null;
-
-  return (
-    <section className="home-particulares" id="projetos">
-      <div className="home-particulares-inner">
-        <div className="home-section-head">
-          <div className="left">
-            <span className="home-section-tag">Decorações</span>
-            <h2 className="home-section-title">
-              {catSelecionada
-                ? catSelecionada.nome
-                : <><em>Nossas</em><br />decorações</>}
-            </h2>
-            <p className="home-section-sub">
-              Cada projeto tem um código único. Mencione o código ao falar com a Cris.
-            </p>
-            {catSelecionada && (
-              <button onClick={onClearCat} style={{ marginTop: 10, fontSize: 13, textDecoration: "underline", color: "var(--fg-mute)" }}>
-                ← ver todas as categorias
-              </button>
-            )}
-          </div>
-          <div className="filtros-count">
-            <strong>{filtradas.length}</strong>
-            <span>projeto{filtradas.length !== 1 ? "s" : ""}</span>
-          </div>
-        </div>
-        {filtradas.length === 0 ? (
-          <div className="empty">
-            <p>Nenhuma decoração cadastrada nesta categoria ainda.</p>
-          </div>
-        ) : (
-          <div className="grid">
-            {filtradas.map((t, i) =>
-              <window.TemaCard key={t.id} tema={t} index={i} onOpen={onOpen} />
-            )}
-          </div>
-        )}
-      </div>
-    </section>);
-}
-
-// ===== APP =====
 function HomeApp() {
   const [query, setQuery] = React.useState("");
   const [categoria, setCategoria] = React.useState("");
@@ -577,10 +554,12 @@ function HomeApp() {
 
   function onSelectCat(cat) {
     setCatSelecionada(cat);
-    setTimeout(() => {
-      const el = document.getElementById("projetos");
-      if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
-    }, 50);
+    if (cat) {
+      setTimeout(() => {
+        const el = document.getElementById("projetos");
+        if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
+      }, 50);
+    }
   }
 
   function onSolicitarPacote(pacote) {
@@ -599,8 +578,7 @@ function HomeApp() {
         setCategoria={setCategoria}
         onSearch={onSearch} />
 
-      <Categorias onSelectCat={onSelectCat} catSelecionada={catSelecionada} />
-      <PortfolioHome temas={temas} catSelecionada={catSelecionada} onClearCat={() => setCatSelecionada(null)} onOpen={setTemaAberto} />
+      <Categorias onSelectCat={onSelectCat} catSelecionada={catSelecionada} temas={temas} onOpen={setTemaAberto} />
       <Pacotes onSolicitar={onSolicitarPacote} />
       <Sobre />
       <Contato
