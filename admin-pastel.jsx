@@ -21,8 +21,6 @@ function resetTemasPastel() {
   try { localStorage.removeItem(STORAGE_KEY_P); } catch (e) {}
 }
 
-// Gera código tipo "CRIS-001", "CRIS-002" — prefixo fixo "CRIS" + número sequencial
-// global por opção (mais personalizado, mantém a identidade da marca).
 function gerarCodigo(nomeTema, indiceOpcao, offsetGlobal = 0) {
   const num = String((offsetGlobal || 0) + indiceOpcao + 1).padStart(3, "0");
   return `CRIS-${num}`;
@@ -45,15 +43,10 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
   const [pass, setPass] = React.useState("");
   const [erro, setErro] = React.useState("");
   const [view, setView] = React.useState("list");
+  const [editId, setEditId] = React.useState(null);
 
-  const [form, setForm] = React.useState({
-    nome: "",
-    categoria: "Infantil",
-    tipo: "parceria",
-    tags: "",
-    descricao: "",
-    opcoes: [{ titulo: "", legenda: "", imagem: "" }],
-  });
+  const formVazio = { nome: "", categoria: "Aniversário Infantil", tipo: "parceria", tags: "", descricao: "", opcoes: [{ titulo: "", legenda: "", imagem: "" }] };
+  const [form, setForm] = React.useState(formVazio);
 
   function tryLogin(e) {
     e.preventDefault();
@@ -98,31 +91,61 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
     e.preventDefault();
     if (!form.nome.trim()) return alert("Nome obrigatório");
     const nomeTrim = form.nome.trim();
-    // Próximo número global = total de opções existentes + 1
-    let prox = temas.reduce((acc, t) => acc + t.opcoes.length, 0);
-    const novo = {
-      id: nomeTrim.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36),
-      nome: nomeTrim,
-      categoria: form.categoria,
-      tipo: form.tipo || "parceria",
-      tags: form.tags.split(",").map(t => t.trim().toLowerCase()).filter(Boolean),
-      descricao: form.descricao.trim() || "Tema personalizado adicionado pela Cris.",
-      opcoes: form.opcoes.map((o) => {
-        prox += 1;
-        return {
-          titulo: o.titulo.trim() || "Versão única",
-          legenda: o.legenda.trim() || "",
-          imagem: o.imagem || "",
-          codigo: `CRIS-${String(prox).padStart(3, "0")}`,
-        };
-      }),
-    };
-    const next = [...temas, novo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    let next;
+
+    if (editId) {
+      // Edição: preserva códigos existentes, gera novo só para opções novas
+      let prox = temas.reduce((acc, t) => t.id === editId ? acc : acc + t.opcoes.length, 0);
+      const atualizado = {
+        ...temas.find(t => t.id === editId),
+        nome: nomeTrim,
+        categoria: form.categoria,
+        tipo: form.tipo || "parceria",
+        tags: form.tags.split(",").map(t => t.trim().toLowerCase()).filter(Boolean),
+        descricao: form.descricao.trim() || "Tema personalizado adicionado pela Cris.",
+        opcoes: form.opcoes.map((o) => {
+          if (o.codigo) return { titulo: o.titulo.trim() || "Versão única", legenda: o.legenda.trim() || "", imagem: o.imagem || "", codigo: o.codigo };
+          prox += 1;
+          return { titulo: o.titulo.trim() || "Versão única", legenda: o.legenda.trim() || "", imagem: o.imagem || "", codigo: `CRIS-${String(prox).padStart(3, "0")}` };
+        }),
+      };
+      next = temas.map(t => t.id === editId ? atualizado : t).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    } else {
+      let prox = temas.reduce((acc, t) => acc + t.opcoes.length, 0);
+      const novo = {
+        id: nomeTrim.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+              .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + Date.now().toString(36),
+        nome: nomeTrim,
+        categoria: form.categoria,
+        tipo: form.tipo || "parceria",
+        tags: form.tags.split(",").map(t => t.trim().toLowerCase()).filter(Boolean),
+        descricao: form.descricao.trim() || "Tema personalizado adicionado pela Cris.",
+        opcoes: form.opcoes.map((o) => {
+          prox += 1;
+          return { titulo: o.titulo.trim() || "Versão única", legenda: o.legenda.trim() || "", imagem: o.imagem || "", codigo: `CRIS-${String(prox).padStart(3, "0")}` };
+        }),
+      };
+      next = [...temas, novo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    }
+
     setTemas(next);
     saveTemasPastel(next);
-    setForm({ nome: "", categoria: "Infantil", tipo: "parceria", tags: "", descricao: "", opcoes: [{ titulo: "", legenda: "", imagem: "" }] });
+    setForm(formVazio);
+    setEditId(null);
     setView("list");
+  }
+
+  function editarTema(tema) {
+    setForm({
+      nome: tema.nome,
+      categoria: tema.categoria,
+      tipo: tema.tipo || "parceria",
+      tags: (tema.tags || []).join(", "),
+      descricao: tema.descricao || "",
+      opcoes: tema.opcoes.map(o => ({ titulo: o.titulo, legenda: o.legenda || "", imagem: o.imagem || "", codigo: o.codigo })),
+    });
+    setEditId(tema.id);
+    setView("add");
   }
 
   function removerTema(id) {
@@ -167,11 +190,11 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
         ) : (
           <div className="admin-body">
             <nav className="admin-nav">
-              <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>
+              <button className={view === "list" ? "active" : ""} onClick={() => { setView("list"); setEditId(null); setForm(formVazio); }}>
                 Temas ({temas.length})
               </button>
-              <button className={view === "add" ? "active" : ""} onClick={() => setView("add")}>
-                + Adicionar tema
+              <button className={view === "add" ? "active" : ""} onClick={() => { setEditId(null); setForm(formVazio); setView("add"); }}>
+                {view === "add" && editId ? "Editando tema" : "+ Adicionar tema"}
               </button>
               <div className="admin-nav-spacer" />
               <button className="admin-nav-side" onClick={resetar}>resetar</button>
@@ -190,6 +213,7 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
                       <strong>{t.nome} <span className="admin-tipo-badge" data-tipo={t.tipo || "parceria"}>{(t.tipo || "parceria") === "particular" ? "Particular" : "Parceria"}</span></strong>
                       <span>{t.categoria} · {t.opcoes.length} opç{t.opcoes.length > 1 ? "ões" : "ão"} · códigos: {t.opcoes.map(o => o.codigo).join(", ")}</span>
                     </div>
+                    <button className="admin-row-edit" onClick={() => editarTema(t)}>editar</button>
                     <button className="admin-row-rm" onClick={() => removerTema(t.id)}>remover</button>
                   </div>
                 ))}
@@ -215,7 +239,7 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
                   <span>Tipo de decoração *</span>
                   <select value={form.tipo} onChange={(e) => setForm({...form, tipo: e.target.value})}>
                     <option value="parceria">Parceria com buffet — aparece no portfólio principal</option>
-                    <option value="particular">Particular — aparece em “Decorações particulares”</option>
+                    <option value="particular">Particular — aparece em "Decorações particulares"</option>
                   </select>
                 </label>
 
@@ -235,14 +259,14 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
                     <button type="button" onClick={addOpcao}>+ adicionar opção</button>
                   </div>
                   {form.opcoes.map((o, i) => {
-                    // Preview do próximo código global
-                    const baseCount = temas.reduce((acc, t) => acc + t.opcoes.length, 0);
-                    const codigoPreview = `CRIS-${String(baseCount + i + 1).padStart(3, "0")}`;
+                    // Se já tem código (edição), mostra o código existente; senão preview do próximo
+                    const baseCount = temas.reduce((acc, t) => t.id === editId ? acc : acc + t.opcoes.length, 0);
+                    const codigoLabel = o.codigo ? o.codigo : `CRIS-${String(baseCount + i + 1).padStart(3, "0")} (novo)`;
                     return (
                       <div key={i} className="admin-opcao admin-opcao-pastel">
                         <div className="admin-opcao-pastel-top">
                           <span className="admin-opcao-num">{String(i + 1).padStart(2, "0")}</span>
-                          <span className="admin-opcao-cod">código: <strong>{codigoPreview}</strong></span>
+                          <span className="admin-opcao-cod">código: <strong>{codigoLabel}</strong></span>
                           <button type="button" className="admin-opcao-rm" onClick={() => rmOpcao(i)}>remover</button>
                         </div>
                         <div className="admin-opcao-pastel-grid">
@@ -286,8 +310,8 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
                 </div>
 
                 <div className="admin-form-foot">
-                  <button type="button" className="btn btn-ghost" onClick={() => setView("list")}>cancelar</button>
-                  <button type="submit" className="btn btn-primary">Salvar tema →</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setForm(formVazio); setEditId(null); setView("list"); }}>cancelar</button>
+                  <button type="submit" className="btn btn-primary">{editId ? "Salvar alterações →" : "Salvar tema →"}</button>
                 </div>
               </form>
             )}
