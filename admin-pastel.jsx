@@ -137,7 +137,7 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
     setTemas(window.getTemasComCodigo());
   }
 
-  const categoriasOpts = ["Infantil", "Casamento", "Adulto", "Corporativo", "Sazonal"];
+  const categoriasOpts = ["Aniversário Infantil", "Casamento", "15 anos", "Chá de bebê", "Chá de revelação", "Bodas", "Batizado", "Datas especiais"];
 
   return (
     <div className="admin-backdrop" onClick={onClose}>

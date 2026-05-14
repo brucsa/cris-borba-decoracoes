@@ -197,9 +197,8 @@ function Busca({ query, setQuery, categoria, setCategoria, onSearch }) {
 }
 
 // ===== CATEGORIAS =====
-function CategoriaCard({ cat, index }) {
+function CategoriaCard({ cat, index, onSelect, selected }) {
   const numStr = String(index + 1).padStart(2, "0");
-  // Background pastel + padrão sutil (placeholder até a Cris ter fotos reais por categoria)
   const bg = {
     background: `
       radial-gradient(circle at 30% 25%, color-mix(in oklab, ${cat.cor} 70%, #FFFAF0) 0%, transparent 55%),
@@ -209,7 +208,8 @@ function CategoriaCard({ cat, index }) {
     `
   };
   return (
-    <a className="cat-card" href={`#decoracoes`} onClick={(e) => e.preventDefault()}>
+    <a className={`cat-card${selected ? " cat-card-selected" : ""}`} href="#projetos"
+      onClick={(e) => { e.preventDefault(); onSelect(cat); }}>
       <div className="cat-card-bg" style={bg}></div>
       <div className="cat-card-overlay"></div>
       <div className="cat-card-arrow">→</div>
@@ -218,10 +218,9 @@ function CategoriaCard({ cat, index }) {
         <h3>{cat.nome}</h3>
       </div>
     </a>);
-
 }
 
-function Categorias() {
+function Categorias({ onSelectCat, catSelecionada }) {
   return (
     <section className="home-categorias" id="decoracoes">
       <div className="home-section-head">
@@ -231,16 +230,19 @@ function Categorias() {
             Encontre a <em>decoração</em><br />perfeita para o seu evento.
           </h2>
           <p className="home-section-sub">
-            Clique em uma categoria para ver todos os temas disponíveis.
-            Cada decoração tem um código único — ao falar com a Cris, basta mencioná-lo.
+            Clique em uma categoria para ver as decorações disponíveis.
+            Cada projeto tem um código único — ao falar com a Cris, basta mencioná-lo.
           </p>
         </div>
       </div>
       <div className="cat-grid">
-        {CATEGORIAS_HOME.map((c, i) => <CategoriaCard key={c.id} cat={c} index={i} />)}
+        {CATEGORIAS_HOME.map((c, i) => (
+          <CategoriaCard key={c.id} cat={c} index={i}
+            onSelect={onSelectCat}
+            selected={catSelecionada && catSelecionada.id === c.id} />
+        ))}
       </div>
     </section>);
-
 }
 
 // ===== PACOTES =====
@@ -500,48 +502,59 @@ function Contato({ mensagemInicial, onMensagemConsumida }) {
 function HomeFooter({ onAdminClick }) {
   return (
     <footer className="home-footer">
-      <span>© 2026 Cris Borba Decorações</span>
-      <span className="sep">·</span>
-      <span>Cada festa, uma memória que fica.</span>
-      <button className="home-footer-admin" onClick={onAdminClick}>
-        área da Cris
-      </button>
+      <span>© 2026 Cris Borba Decorações <span className="sep">·</span> Cada festa, uma memória que fica.</span>
+      <button className="home-footer-admin" onClick={onAdminClick}>área da Cris</button>
     </footer>);
-
 }
 
 // ===== APP =====
-// ===== PROJETOS PARTICULARES (cadastrados pela Cris no admin) =====
-function ProjetosParticulares({ temas, onOpen }) {
-  const lista = (temas || []).filter((t) => t.tipo === "particular");
-  if (lista.length === 0) return null;
+// ===== PORTFOLIO FILTRADO POR CATEGORIA =====
+function PortfolioHome({ temas, catSelecionada, onClearCat, onOpen }) {
+  const particulares = (temas || []).filter((t) => t.tipo === "particular");
+  const filtradas = catSelecionada
+    ? particulares.filter((t) => t.categoria === catSelecionada.nome)
+    : particulares;
+
+  if (particulares.length === 0) return null;
+
   return (
     <section className="home-particulares" id="projetos">
       <div className="home-particulares-inner">
         <div className="home-section-head">
           <div className="left">
-            <span className="home-section-tag">Projetos</span>
+            <span className="home-section-tag">Decorações</span>
             <h2 className="home-section-title">
-              Decorações <em>particulares</em><br />já realizadas.
+              {catSelecionada
+                ? catSelecionada.nome
+                : <><em>Nossas</em><br />decorações</>}
             </h2>
             <p className="home-section-sub">
-              Cada projeto tem um código único. Ao falar com a Cris, mencione o código para
-              identificar exatamente a decoração e versão.
+              Cada projeto tem um código único. Mencione o código ao falar com a Cris.
             </p>
+            {catSelecionada && (
+              <button onClick={onClearCat} style={{ marginTop: 10, fontSize: 13, textDecoration: "underline", color: "var(--fg-mute)" }}>
+                ← ver todas as categorias
+              </button>
+            )}
           </div>
           <div className="filtros-count">
-            <strong>{lista.length}</strong>
-            <span>projeto{lista.length > 1 ? "s" : ""}</span>
+            <strong>{filtradas.length}</strong>
+            <span>projeto{filtradas.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
-        <div className="grid">
-          {lista.map((t, i) =>
-          <window.TemaCard key={t.id} tema={t} index={i} onOpen={onOpen} />
-          )}
-        </div>
+        {filtradas.length === 0 ? (
+          <div className="empty">
+            <p>Nenhuma decoração cadastrada nesta categoria ainda.</p>
+          </div>
+        ) : (
+          <div className="grid">
+            {filtradas.map((t, i) =>
+              <window.TemaCard key={t.id} tema={t} index={i} onOpen={onOpen} />
+            )}
+          </div>
+        )}
       </div>
     </section>);
-
 }
 
 // ===== APP =====
@@ -555,10 +568,19 @@ function HomeApp() {
   const [adminOpen, setAdminOpen] = React.useState(false);
   const [mensagemInicial, setMensagemInicial] = React.useState("");
   const [temaAberto, setTemaAberto] = React.useState(null);
+  const [catSelecionada, setCatSelecionada] = React.useState(null);
 
   function onSearch() {
     const el = document.getElementById("decoracoes");
     if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
+  }
+
+  function onSelectCat(cat) {
+    setCatSelecionada(cat);
+    setTimeout(() => {
+      const el = document.getElementById("projetos");
+      if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
+    }, 50);
   }
 
   function onSolicitarPacote(pacote) {
@@ -576,9 +598,9 @@ function HomeApp() {
         categoria={categoria}
         setCategoria={setCategoria}
         onSearch={onSearch} />
-      
-      <Categorias />
-      <ProjetosParticulares temas={temas} onOpen={setTemaAberto} />
+
+      <Categorias onSelectCat={onSelectCat} catSelecionada={catSelecionada} />
+      <PortfolioHome temas={temas} catSelecionada={catSelecionada} onClearCat={() => setCatSelecionada(null)} onOpen={setTemaAberto} />
       <Pacotes onSolicitar={onSolicitarPacote} />
       <Sobre />
       <Contato
