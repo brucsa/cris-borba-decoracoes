@@ -28,14 +28,15 @@ function gerarCodigo(nomeTema, indiceOpcao, offsetGlobal = 0) {
   return `CRIS-${num}`;
 }
 
-// Lê arquivo de imagem como data URL (para uso simples sem backend)
-function lerImagem(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+async function uploadImagemSupabase(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 6)}.${ext}`;
+  const { data, error } = await window.supabaseClient.storage
+    .from('temas')
+    .upload(fileName, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  const { data: pub } = window.supabaseClient.storage.from('temas').getPublicUrl(data.path);
+  return pub.publicUrl;
 }
 
 function AdminPanelPastel({ onClose, temas, setTemas }) {
@@ -83,11 +84,13 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
   }
   async function uploadOpcao(i, file) {
     if (!file) return;
+    setOpcao(i, "imagem", "uploading");
     try {
-      const dataUrl = await lerImagem(file);
-      setOpcao(i, "imagem", dataUrl);
+      const url = await uploadImagemSupabase(file);
+      setOpcao(i, "imagem", url);
     } catch (e) {
-      alert("Erro ao carregar imagem.");
+      setOpcao(i, "imagem", "");
+      alert("Erro ao fazer upload: " + e.message);
     }
   }
 
@@ -244,7 +247,12 @@ function AdminPanelPastel({ onClose, temas, setTemas }) {
                         </div>
                         <div className="admin-opcao-pastel-grid">
                           <div className="admin-img-up">
-                            {o.imagem ? (
+                            {o.imagem === "uploading" ? (
+                              <div className="admin-img-drop" style={{cursor:"default"}}>
+                                <span className="up-icon">⏳</span>
+                                <span>enviando...</span>
+                              </div>
+                            ) : o.imagem ? (
                               <div className="admin-img-preview">
                                 <img src={o.imagem} alt="preview" />
                                 <button type="button" onClick={() => setOpcao(i, "imagem", "")}>trocar</button>
